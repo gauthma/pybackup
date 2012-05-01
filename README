@@ -1,0 +1,14 @@
+Small script to ease backup to an encrypted drive. It mounts/decrypts the drive, backs up what has to be backed up, and unmounts/encrypts the drive. The files or folders to be backed up are read from a config file named backup.json, which must reside in the same place has the python script. 
+
+The backup process has three steps:
+ - create a tarball with the files/folders in dirs/directories and save it the settings/backup_dir_name in the encrypted drive
+ - create a tarball with the files/folders in dirs/root_directories, and idem.
+ - rsync the contents of the folders in dirs/rsync_directories to equally named folders in settings/backup_dir_name
+
+INSTALL
+Just copy the script and config file to any place of your choosing, customize the latter to suit your needs, and you're done.
+
+ISSUES
+ - Works with python 3.
+ - Ctrl-C interrupts are not handled, and this may cause the terminal to go beserk (issuing a "reset" should fix it, though).
+ - If only doing a backup, and sudo credentials have expired, the prompt for the passwords get garbled up in the midst of other ouput. To be fixed when time allows (because that's an use case I use rarely...)

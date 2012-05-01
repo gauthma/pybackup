@@ -1,0 +1,21 @@
+{
+	"settings"	: {
+		"computer"								: "mypc",
+		"backup_dir_name"					: "backups",
+		"luksdrive"								: "/dev/sdc2",
+		"luks_device_name"				: "luksDevice",
+		"luks_drive_mount_point"	: "/media/luksDevice"
+	},
+
+	"dirs"		: {
+		"rsync_directories"	: [ "/home/user/someFolder1"  ,
+												"/home/user/someFolder2" ,
+												"/home/user/someFolder3" ] ,
+
+		"root_directories"	: [ "/etc" ] ,
+
+		"directories"				: [ "/home/user/someFolder4" ,
+												"/home/user/someFile1" ,
+												"/home/user/someFile2" ]
+	}
+}
