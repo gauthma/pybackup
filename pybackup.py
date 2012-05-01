@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from subprocess import Popen, PIPE, check_call
 import os
 import json
 from time import time
