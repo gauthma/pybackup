@@ -8,6 +8,9 @@ The backup process has three steps:
 INSTALL
 Just copy the script and config file to any place of your choosing, customize the latter to suit your needs, and you're done.
 
+DEPENDENCIES
+It requires dm_crypt, sudo, pv, rsync, tar and gzip
+
 ISSUES
  - Works with python 3.
  - Ctrl-C interrupts are not handled, and this may cause the terminal to go beserk (issuing a "reset" should fix it, though).
