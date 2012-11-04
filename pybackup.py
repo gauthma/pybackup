@@ -1,26 +1,13 @@
 #!/usr/bin/env python
 
-# pybackup - ease regular encrypted backups
-# Copyright (C) 2012 Oscar Pereira
-
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 import os
 import json
 from time import time
 from datetime import date
+from getpass import getpass, GetPassWarning
 import argparse
+
+config = ""
 
 def backup(config):
   '''Does the backup proper. Assumes all drives are mounted (and leaves them like that)'''
@@ -39,16 +26,76 @@ def backup(config):
   tar_archive_name=computer + "-" + timestamp + "-full-" + backup_date +".tar.gz"
   root_tar_archive_name=computer + "-ROOTCFG-" + timestamp + "-" + backup_date +".tar.gz"
 
-  # now handle backup (TODO: handle the sudo request, if user runs only backup, and sudo
-  # credentials have expired)
-  os.system("tar -cf - " + directories + " | pv -s $(du -sbc " + directories +
-            " | tail -1 | awk '{print $1}') | gzip > " + backup_dir + "/" + tar_archive_name )
-  os.system("sudo tar -cf - " + root_directories + " | pv -s $(du -sbc " + root_directories +
-            " |  tail -1 | awk '{print $1}') | gzip > " + backup_dir + "/" + root_tar_archive_name)
+  os.system("sudo tar -cf - " + directories + " " + root_directories + " | pv --wait -s $( 2> /dev/null du -sbc " +
+            directories + " " + root_directories + " | tail -1 | awk '{print $1}') | gzip > " + backup_dir + "/" + tar_archive_name )
 
+  do_rsync_backup()
+
+def remote_backup():
+  '''Does the remote backup proper. Ignores rsync file/dir list
+     remote_backup_path must exist and be writable!'''
+  # extract needed info from config file
+  computer=config['settings']['computer']
+  backup_dir=config['settings']['remote_backup_tmp_path']
+  remote_backup_dir_name=config['settings']['remote_backup_dir_name']
+  remote_site=config['settings']['remote_site']
+  directories=' '.join([ shellquote(i) for i in config['dirs']['directories'] ])
+  root_directories=' '.join([ shellquote(i) for i in config['dirs']['root_directories'] ])
+
+  # now set time/date, and file names
+  timestamp=str(round(time()))
+  backup_date=date.today().strftime("%Y%b%d")
+  tar_archive_name=computer + "-" + timestamp + "-full-" + backup_date +".tar.gz"
+  root_tar_archive_name=computer + "-ROOTCFG-" + timestamp + "-" + backup_date +".tar.gz"
+
+  os.system("sudo tar -cf - " + directories + " " + root_directories + " | pv --wait -s $( 2> /dev/null du -sbc " +
+            directories + " " + root_directories + " | tail -1 | awk '{print $1}') | gzip > " + backup_dir + "/" + tar_archive_name )
+
+  # encrypt and scp the result
+  try:
+    passphrase = "1"
+    passphrase1 = "2"
+    while passphrase != passphrase1:
+      passphrase = getpass(prompt='Please enter encryption passphrase: ')
+      passphrase1 = getpass(prompt='Please enter encryption passphrase again: ')
+      if passphrase != passphrase1:
+        print("Passphrases did NOT match! Try again...")
+
+    print ("Creating encrypted backup archive... (this can take a few minutes)")
+    os.system("echo -n \"" + passphrase + "\" | gpg --symmetric --batch --passphrase-fd 0 --no-tty \
+              --cipher-algo aes256 --force-mdc -o " + backup_dir + "/bck-" + timestamp + "-" +
+              backup_date + "tar.gz.gpg " + backup_dir + "/" + tar_archive_name)
+    print ("Transfering encrypted backup archive to remote location...")
+    os.system("scp " + backup_dir + "/bck-" + timestamp + "-" + backup_date + "tar.gz.gpg " + remote_site + ":" + remote_backup_dir_name)
+
+    # clean up
+    print ("Cleaning up...")
+    os.system("rm -rf " + backup_dir + "/" + tar_archive_name)
+    os.system("rm -rf " + backup_dir + "/bck-" + timestamp + "-" + backup_date + ".gpg")
+  except GetPassWarning:
+    print("Could not read passphrase. Exiting...")
+
+def decrypt_remote_backup(encrypted_file): # TODO make sure decrypted file is written in current dir, not dir where script is
+  '''Assumes that the encrypted file has name like: filename.tar.gz.gpg'''
+  try:
+    passphrase = getpass(prompt='Please enter decryption passphrase: ')
+
+    print ("Decrypting backup archive... (this can take a few minutes)")
+    os.system("echo -n \"" + passphrase + "\" | gpg --decrypt --batch --passphrase-fd 0 --no-tty \
+              --cipher-algo aes256 --force-mdc " + encrypted_file + " > " + encrypted_file[:-4] )
+  except GetPassWarning:
+    print("Could not read passphrase. Exiting...")
+
+def do_rsync_backup():
+  luks_drive_mount_point=config['settings']['luks_drive_mount_point']
+  backup_dir_name=config['settings']['backup_dir_name']
+  backup_dir=luks_drive_mount_point + "/" + backup_dir_name
+
+  rsync_directories=[ shellquote(i) for i in config['dirs']['rsync_directories'] ]
   for folder in rsync_directories:
     os.system("rsync -avz --human-readable --delete-before --exclude=\"*.swp\" "
               + folder + " " + backup_dir)
+
 def parse_config_file():
   from os import path
   script_path=path.dirname(__file__)
@@ -57,9 +104,6 @@ def parse_config_file():
   try:
     json_data=open(script_path + 'backup.json')
     data=json.load(json_data)
-    # useful for debug
-    #from pprint import pprint
-    #pprint(data)
     return data
   except:
     print("Could not read config file:")
@@ -109,8 +153,15 @@ def main():
   parser.add_argument("-b", "--backup",
                       action="store_true", dest="do_backup", default=False,
                       help="Only do backup, don't mount or unmount anything")
+  parser.add_argument("-r", "--remote-backup",
+                      action="store_true", dest="do_remote_backup", default=False,
+                      help="Only do remote backup, (ignores rsync list)")
+  parser.add_argument("-d", "--decrypt-remote-backup",
+                      dest="remote_backup_archive_name", default="",
+                      help="Decrypt remote backup archive (*.tar.gz.gpg)")
 
   args = parser.parse_args()
+  global config
   config = parse_config_file()
 
   if args.mountLuks:
@@ -119,6 +170,10 @@ def main():
     unmountLuks(config)
   elif args.do_backup:
     backup(config)
+  elif args.do_remote_backup:
+    remote_backup()
+  elif args.remote_backup_archive_name:
+    decrypt_remote_backup(args.remote_backup_archive_name)
   else:
     mountLuks(config)
     backup(config)
