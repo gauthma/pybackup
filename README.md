@@ -1,4 +1,5 @@
 PyBackup 
+===
 This script is my solution to the problem of backups. It has two working modes:
 it backs up your information either to a LUKS encrypted external drive, or to
 some remote location of your choosing. Information to backup is separated in
@@ -16,8 +17,9 @@ three components:
 In the file backup.json, in the "dirs" section, you can choose which folders
 fit which category. 
 
-EXTERNAL DRIVE
-In the external drive scenario, it mounts/decrypts the drive, backs up what has
+External Drive
+---
+in the external drive scenario, it mounts/decrypts the drive, backs up what has
 to be backed up, and unmounts/encrypts the drive. The files or folders to be
 backed up are read from a config file named backup.json, which must reside in
 the same place has the python script. All the three types of information
@@ -30,7 +32,8 @@ line options. Here's the process:
  - rsync the contents of the folders in dirs/rsync_directories to equally named
 	 folders in settings/backup_dir_name 
 
-REMOTE NETWORK STORAGE
+Remote Network Storage
+---
 The second scenario only backs up types 1. and 2. of information. Folders to be
 rsynced are NOT backed up. The is done invoking the script with the '-r'
 option. Process outline:
@@ -50,18 +53,22 @@ provided: just call the script with "-d archive_name.tar.gz.gpg". You'll be
 prompted for the password, and the decrypted version archive_name.tar.gz will
 be produced in the current folder. 
 
-INSTALL 
+Install 
+---
 Just copy the script and config file to any place of your choosing,
 customize the latter to suit your needs, and you're done.
 
-DEPENDENCIES
+Dependencies
+---
 It requires dm_crypt, sudo, pv, rsync, gnupg, tar and gzip
 
-ISSUES
+Issues
+---
  - Works (possibly only) with python 3. 
  - Ctrl-C interrupts are not handled, and this may cause the terminal to go
 	 berserk (issuing a "reset" command fixes it, though). 
 
-NOTES
+Notes
+---
 For instructions on how to created an encrypted LUKS volume, see for instance, here:
 http://www.circuidipity.com/encrypt-external-drive.html

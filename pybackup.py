@@ -22,28 +22,52 @@ from time import time
 from datetime import date
 from getpass import getpass, GetPassWarning
 import argparse
+import shlex
+import subprocess
+
+# XXX TODO allow backup device to be specified in cmd line!
 
 config = ""
 
+def create_tar_archive():
+  '''Create tar archive in ~/tmp/tar_archive_name'''
+  directories=' '.join([ shellquote(i) for i in config['dirs']['directories'] ])
+  root_directories=' '.join([ shellquote(i) for i in config['dirs']['root_directories'] ])
+  computer=config['settings']['computer']
+
+  backup_date=date.today().strftime("%Y%b%d")
+  tar_archive_name=computer + "-full-" + backup_date +".tar.gz"
+
+  if os.path.exists("~/tmp/" + tar_archive_name):
+    return "~/tmp/"+tar_archive_name
+
+  os.system("sudo tar -cf - " + directories + " " + root_directories + " | pv --wait -s $( 2> /dev/null du -sbc " +
+            directories + " " + root_directories + " | tail -1 | awk '{print $1}') | gzip > " + "~/tmp/" + tar_archive_name )
+
+  return "~/tmp/"+tar_archive_name
+
+def delete_tar_archive():
+  '''Delete tar archive in ~/tmp/tar_archive_name'''
+  directories=' '.join([ shellquote(i) for i in config['dirs']['directories'] ])
+  root_directories=' '.join([ shellquote(i) for i in config['dirs']['root_directories'] ])
+  computer=config['settings']['computer']
+
+  backup_date=date.today().strftime("%Y%b%d")
+  tar_archive_name=computer + "-full-" + backup_date +".tar.gz"
+  os.system("rm -rf " + "~/tmp/" + tar_archive_name)
+
 def backup(config):
-  '''Does the backup proper. Assumes all drives are mounted (and leaves them like that)'''
+  '''Does the backup proper (including rsync, but not remote).
+  Assumes all drives are mounted (and leaves them like that)'''
   # extract needed info from config file
   computer=config['settings']['computer']
   luks_drive_mount_point=config['settings']['luks_drive_mount_point']
   backup_dir_name=config['settings']['backup_dir_name']
   backup_dir=luks_drive_mount_point + "/" + backup_dir_name
-  directories=' '.join([ shellquote(i) for i in config['dirs']['directories'] ])
-  root_directories=' '.join([ shellquote(i) for i in config['dirs']['root_directories'] ])
   rsync_directories=[ shellquote(i) for i in config['dirs']['rsync_directories'] ]
 
-  # now set time/date, and file names
-  timestamp=str(round(time()))
-  backup_date=date.today().strftime("%Y%b%d")
-  tar_archive_name=computer + "-" + timestamp + "-full-" + backup_date +".tar.gz"
-  root_tar_archive_name=computer + "-ROOTCFG-" + timestamp + "-" + backup_date +".tar.gz"
-
-  os.system("sudo tar -cf - " + directories + " " + root_directories + " | pv --wait -s $( 2> /dev/null du -sbc " +
-            directories + " " + root_directories + " | tail -1 | awk '{print $1}') | gzip > " + backup_dir + "/" + tar_archive_name )
+  tar_archive_path = create_tar_archive()
+  os.system("cp " + tar_archive_path + " " + backup_dir);
 
   do_rsync_backup()
 
@@ -51,21 +75,21 @@ def remote_backup():
   '''Does the remote backup proper. Ignores rsync file/dir list
      remote_backup_path must exist and be writable!'''
   # extract needed info from config file
-  computer=config['settings']['computer']
   backup_dir=config['settings']['remote_backup_tmp_path']
   remote_backup_dir_name=config['settings']['remote_backup_dir_name']
   remote_site=config['settings']['remote_site']
   directories=' '.join([ shellquote(i) for i in config['dirs']['directories'] ])
   root_directories=' '.join([ shellquote(i) for i in config['dirs']['root_directories'] ])
 
+  if (not os.path.exists(os.path.expanduser(backup_dir))):
+    print ("Backup tmp path does NOT exist: ", backup_dir, "\nExiting...")
+    return
+
   # now set time/date, and file names
   timestamp=str(round(time()))
   backup_date=date.today().strftime("%Y%b%d")
-  tar_archive_name=computer + "-" + timestamp + "-full-" + backup_date +".tar.gz"
-  root_tar_archive_name=computer + "-ROOTCFG-" + timestamp + "-" + backup_date +".tar.gz"
 
-  os.system("sudo tar -cf - " + directories + " " + root_directories + " | pv --wait -s $( 2> /dev/null du -sbc " +
-            directories + " " + root_directories + " | tail -1 | awk '{print $1}') | gzip > " + backup_dir + "/" + tar_archive_name )
+  tar_archive_path = create_tar_archive()
 
   # encrypt and scp the result
   try:
@@ -80,13 +104,13 @@ def remote_backup():
     print ("Creating encrypted backup archive... (this can take a few minutes)")
     os.system("echo -n \"" + passphrase + "\" | gpg --symmetric --batch --passphrase-fd 0 --no-tty \
               --cipher-algo aes256 --force-mdc -o " + backup_dir + "/bck-" + timestamp + "-" +
-              backup_date + "tar.gz.gpg " + backup_dir + "/" + tar_archive_name)
+              backup_date + ".tar.gz.gpg " + tar_archive_path)
     print ("Transfering encrypted backup archive to remote location...")
-    os.system("scp " + backup_dir + "/bck-" + timestamp + "-" + backup_date + "tar.gz.gpg " + remote_site + ":" + remote_backup_dir_name)
+    os.system("scp " + backup_dir + "/bck-" + timestamp + "-" + backup_date + ".tar.gz.gpg " + remote_site + ":" + remote_backup_dir_name)
 
     # clean up
     print ("Cleaning up...")
-    os.system("rm -rf " + backup_dir + "/" + tar_archive_name)
+    #os.system("rm -rf " + backup_dir + "/" + tar_archive_name)
     os.system("rm -rf " + backup_dir + "/bck-" + timestamp + "-" + backup_date + ".gpg")
   except GetPassWarning:
     print("Could not read passphrase. Exiting...")
@@ -105,11 +129,15 @@ def decrypt_remote_backup(encrypted_file): # TODO make sure decrypted file is wr
 def do_rsync_backup():
   luks_drive_mount_point=config['settings']['luks_drive_mount_point']
   backup_dir_name=config['settings']['backup_dir_name']
-  backup_dir=luks_drive_mount_point + "/" + backup_dir_name
+  backup_dir=luks_drive_mount_point + "/" + backup_dir_name + "/rsync/"
 
   rsync_directories=[ shellquote(i) for i in config['dirs']['rsync_directories'] ]
   for folder in rsync_directories:
-    os.system("rsync -avz --human-readable --delete-before --exclude=\"*.swp\" "
+    # strip trailing slash in folder, if there is one
+    # otherwise rsync copies the *contents* of the folder instead of the folder itself
+    # WHICH IS PROBLEMATIC BECAUSE OF DELETE
+    if folder.endswith('/'): folder = folder[:-1]
+    os.system("rsync -avz --human-readable --delete-during --exclude=\"*.swp\" "
               + folder + " " + backup_dir)
 
 def parse_config_file():
@@ -131,26 +159,47 @@ def parse_config_file():
 def shellquote(s):
   '''Handle filenames that need escaping. Borrowed from:
   http://stackoverflow.com/questions/35817/how-to-escape-os-system-calls-in-python'''
-  return "'" + s.replace("'", "'\\'") + "'"
+  #return "'" + s.replace("'", "'\\'") + "'"
+  return shlex.quote(s)
 
 def mountLuks(config):
   luksdrive=config['settings']['luksdrive']
   luks_device_name=config['settings']['luks_device_name']
   luks_drive_mount_point=config['settings']['luks_drive_mount_point']
 
+  # check if luks_drive_mount_point does NOT exist: error otherwise
+  if (os.path.exists(luks_drive_mount_point)):
+    print ("LUKS mount point is ", luks_drive_mount_point, "\nFile or folder exists! Exiting...")
+    return
+
   open_luks_cmd = "sudo cryptsetup luksOpen " + luksdrive + " " + luks_device_name
   create_luks_mount_point="sudo mkdir -v " + luks_drive_mount_point
   mount_luks_cmd = "sudo mount /dev/mapper/" + luks_device_name + " " + luks_drive_mount_point
+  remove_luks_mount_point="sudo rmdir -v " + luks_drive_mount_point
 
-  print("Enter sudo password if necessary:")
+  print("Enter sudo password if necessary!")
+  try: # handle this properly! (error capture)
   os.system(open_luks_cmd)
   os.system(create_luks_mount_point)
   os.system(mount_luks_cmd)
+  except:
+    print("Ups!")
+    os.system(remove_luks_mount_point)
 
 def unmountLuks(config):
   luks_drive_mount_point=config['settings']['luks_drive_mount_point']
   luks_device_name=config['settings']['luks_device_name']
   remove_luks_mount_point="sudo rmdir -v " + luks_drive_mount_point
+
+  # check that the LUKS mount point really has a LUKS drive mounted
+  devnull=open("/dev/null", "w")
+  p1=subprocess.Popen(["mount" ], stdout=subprocess.PIPE)
+  p2=subprocess.Popen(["grep", luks_drive_mount_point], stdin=p1.stdout, stdout=devnull, stderr=devnull)
+  p1.stdout.close()
+  p2.communicate()[0]
+  if(p2.returncode != 0): # TODO run another grep for /dev/mapper
+    print ("LUKS mount point is ", luks_drive_mount_point, "\nBut LUKS drive not mounted there! Exiting...")
+    return
 
   print("Enter sudo password if necessary:")
   os.system("sudo umount " + luks_drive_mount_point )
@@ -159,7 +208,7 @@ def unmountLuks(config):
 
 def main():
   parser = argparse.ArgumentParser(description='Automate backup process. Run without arguments \
-                                   to open LUKS, backup stuff, and close LUKS.')
+                                   to open LUKS, backup stuff (tar, rsync and remote), and close LUKS.')
   parser.add_argument("-m", "--mount",
                       action="store_true", dest="mountLuks", default=False,
                       help="Only mount LUKS drive, and exit")
@@ -168,10 +217,10 @@ def main():
                       help="Only UNmount LUKS drive, and exit")
   parser.add_argument("-b", "--backup",
                       action="store_true", dest="do_backup", default=False,
-                      help="Only do backup, don't mount or unmount anything")
+                      help="Mount LUKS drivem, do backup (i.e. tar and rsync), unmount.")
   parser.add_argument("-r", "--remote-backup",
                       action="store_true", dest="do_remote_backup", default=False,
-                      help="Only do remote backup, (ignores rsync list)")
+                      help="Only do remote backup, (ignores tar and rsync list)")
   parser.add_argument("-d", "--decrypt-remote-backup",
                       dest="remote_backup_archive_name", default="",
                       help="Decrypt remote backup archive (*.tar.gz.gpg)")
@@ -185,14 +234,20 @@ def main():
   elif args.unmountLuks:
     unmountLuks(config)
   elif args.do_backup:
+    mountLuks(config)
     backup(config)
+    delete_tar_archive()
+    unmountLuks(config)
   elif args.do_remote_backup:
     remote_backup()
+    delete_tar_archive()
   elif args.remote_backup_archive_name:
     decrypt_remote_backup(args.remote_backup_archive_name)
   else:
     mountLuks(config)
+    remote_backup()
     backup(config)
+    delete_tar_archive()
     unmountLuks(config)
 
 if __name__ == "__main__":
