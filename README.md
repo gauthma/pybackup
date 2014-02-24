@@ -5,17 +5,17 @@ working modes: it backs up your information either to a LUKS
 encrypted external drive, or to some remote location of your
 choosing. Information to back up is separated in three components: 
 
-	1. Information for which you want multiple integral copies,
-		 gzipped. This is usually personal documents that are not very
-		 large (for instance, not photos), and that evolves over time.
-		 For example, a thesis you're working on. But it might also
-		 include things like the configuration files in /etc (which
-		 might require `sudo` privileges). All this information is
-		 stored in a gzipped tarball, named with the current date and
-		 timestamp.
-	2. Information that, due to its volume, you want to keep only a
-		 copy, rscynced with the original. Photos, music, videos, for
-		 example.
+1. Information for which you want multiple integral copies,
+	 gzipped. This is usually personal documents that are not very
+	 large (for instance, not photos), and that evolves over time.
+	 For example, a thesis you're working on. But it might also
+	 include things like the configuration files in /etc (which
+	 might require `sudo` privileges). All this information is
+	 stored in a gzipped tarball, named with the current date and
+	 timestamp.
+2. Information that, due to its volume, you want to keep only a
+	 copy, rscynced with the original. Photos, music, videos, for
+	 example.
 
 In the file backup.json, in the "dirs" section, you can choose which folders
 fit which category. Too see the available options, run the script
