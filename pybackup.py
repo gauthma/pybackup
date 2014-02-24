@@ -68,7 +68,7 @@ def delete_tar_archive():
   tar_archive_name=computer + "-full-" + backup_date +".tar.gz"
   sp.call("rm -rf " + "~/tmp/" + tar_archive_name, shell = True)
 
-def backup():
+def backup(tar_archive_path):
   '''Does the backup proper (including rsync, but not remote).
   Assumes all drives are mounted (and leaves them like that)'''
   # extract needed info from config file
@@ -78,16 +78,12 @@ def backup():
   backup_dir=luks_drive_mount_point + "/" + backup_dir_name
   rsync_directories=[ shellquote(i) for i in config['dirs']['rsync_directories'] ]
 
-  tar_archive_path = create_tar_archive()
   # XXX TODO put pv here to show the copy progress
   sp.call("cp " + tar_archive_path + " " + backup_dir, shell=True);
 
-  do_rsync_backup()
-  delete_tar_archive()
-
 # MAJOR TODO XXX re-write this in order to ask all the passwords in one go
 # (instead of one at a time...)
-def remote_backup():
+def remote_backup(tar_archive_path):
   '''Does the remote backup proper. Ignores rsync file/dir list
   remote_backup_path must exist and be writable!'''
   # extract needed info from config file
@@ -104,8 +100,6 @@ def remote_backup():
   # now set time/date, and file names
   timestamp=str(round(time()))
   backup_date=date.today().strftime("%Y%b%d")
-
-  tar_archive_path = create_tar_archive()
 
   # encrypt and scp the result
   try:
@@ -260,17 +254,25 @@ def main():
     unmountLuks()
   elif args.do_backup:
     mountLuks()
-    remote_backup()
-    backup()
+    tar_archive_path = create_tar_archive()
+    remote_backup(tar_archive_path)
+    backup(tar_archive_path)
+    delete_tar_archive(tar_archive_path)
+    do_rsync_backup()
     unmountLuks()
   elif args.do_remote_backup:
-    remote_backup()
+    tar_archive_path = create_tar_archive()
+    remote_backup(tar_archive_path)
+    delete_tar_archive(tar_archive_path)
   elif args.remote_backup_archive_name:
     decrypt_remote_backup(args.remote_backup_archive_name)
   else:
     mountLuks()
-    #backup()
+    tar_archive_path = create_tar_archive()
+    backup(tar_archive_path)
+    delete_tar_archive(tar_archive_path)
     do_rsync_backup()
+
     unmountLuks()
 
 if __name__ == "__main__":
