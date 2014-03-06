@@ -58,14 +58,8 @@ def create_tar_archive():
 
   return "~/tmp/"+tar_archive_name
 
-def delete_tar_archive():
+def delete_tar_archive(tar_archive_name):
   '''Delete tar archive in ~/tmp/tar_archive_name'''
-  directories=' '.join([ shellquote(i) for i in config['dirs']['directories'] ])
-  root_directories=' '.join([ shellquote(i) for i in config['dirs']['root_directories'] ])
-  computer=config['settings']['computer']
-
-  backup_date=date.today().strftime("%Y%b%d")
-  tar_archive_name=computer + "-full-" + backup_date +".tar.gz"
   sp.call("rm -rf " + "~/tmp/" + tar_archive_name, shell = True)
 
 def backup(tar_archive_path):
@@ -242,6 +236,9 @@ def main():
   parser.add_argument("-r", "--remote-backup",
                       action="store_true", dest="do_remote_backup", default=False,
                       help="Only do remote backup, (ignores tar and rsync list)")
+  parser.add_argument("-R", "--rsync-backup",
+                      action="store_true", dest="do_rsync_backup", default=False,
+                      help="Only do rsync backup, (ignores tar and remote list)")
   parser.add_argument("-d", "--decrypt-remote-backup",
                       dest="remote_backup_archive_name", default="",
                       help="Decrypt remote backup archive (*.tar.gz.gpg)")
@@ -264,6 +261,10 @@ def main():
     tar_archive_path = create_tar_archive()
     remote_backup(tar_archive_path)
     delete_tar_archive(tar_archive_path)
+  elif args.do_rsync_backup:
+    mountLuks()
+    do_rsync_backup()
+    unmountLuks()
   elif args.remote_backup_archive_name:
     decrypt_remote_backup(args.remote_backup_archive_name)
   else:
