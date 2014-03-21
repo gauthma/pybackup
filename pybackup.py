@@ -63,8 +63,7 @@ def delete_tar_archive(tar_archive_name):
   sp.call("rm -rf " + "~/tmp/" + tar_archive_name, shell = True)
 
 def backup(tar_archive_path):
-  '''Does the backup proper (including rsync, but not remote).
-  Assumes all drives are mounted (and leaves them like that)'''
+  '''Does the backup of tar ONLY. Assumes all drives are mounted (and leaves them like that)'''
   # extract needed info from config file
   computer=config['settings']['computer']
   luks_drive_mount_point=config['settings']['luks_drive_mount_point']

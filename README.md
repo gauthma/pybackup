@@ -3,19 +3,19 @@ PyBackup
 This script is my solution to the problem of backups. It has two
 working modes: it backs up your information either to a LUKS
 encrypted external drive, or to some remote location of your
-choosing. Information to back up is separated in three components: 
+choosing. Information to back up is separated in two components: 
 
-1. Information for which you want multiple integral copies,
-	 gzipped. This is usually personal documents that are not very
-	 large (for instance, not photos), and that evolves over time.
-	 For example, a thesis you're working on. But it might also
-	 include things like the configuration files in /etc (which
-	 might require `sudo` privileges). All this information is
-	 stored in a gzipped tarball, named with the current date and
-	 timestamp.
-2. Information that, due to its volume, you want to keep only a
-	 copy, rscynced with the original. Photos, music, videos, for
-	 example.
+	1. Information for which you want multiple integral copies,
+		 gzipped. This is usually personal documents that are not very
+		 large (for instance, not photos), and that evolves over time.
+		 For example, a thesis you're working on. But it might also
+		 include things like the configuration files in /etc (which
+		 might require `sudo` privileges). All this information is
+		 stored in a gzipped tarball, named with the current date and
+		 timestamp.
+	2. Information that, due to its volume, you want to keep only a
+		 copy, rscynced with the original. Photos, music, videos, for
+		 example.
 
 In the file backup.json, in the "dirs" section, you can choose which folders
 fit which category. Too see the available options, run the script
@@ -31,18 +31,17 @@ script. All the three types of information mentioned above are
 backed up. To use this mode, run the script with no command line
 options. Here's the process:
 
- - create a tarball with the files/folders in dirs/directories and
-	 save it the settings/backup_dir_name in the encrypted drive 
- - create a tarball with the files/folders in dirs/root_directories,
-	 and idem.
+ - create a tarball with the files/folders in dirs/directories and 
+   dirs/root_directories and save it the settings/backup_dir_name 
+	 in the encrypted drive 
  - rsync the contents of the folders in dirs/rsync_directories to
 	 equally named folders in settings/backup_dir_name 
 
 Remote Network Storage
 ---
-The second scenario only backs up types 1. and 2. of information.
-Folders to be rsynced are NOT backed up. The is done invoking the
-script with the `-r` option. Process outline:
+The second scenario only backs up type 1. of information. Folders to be rsynced
+are NOT backed up. The is done invoking the script with the `-r` option.
+Process outline:
 
  - create a tarball with the files and folders to back up, and save
 	 it in settings:remote_backup_tmp_path. 
