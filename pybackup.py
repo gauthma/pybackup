@@ -1,7 +1,7 @@
 #!/usr/bin/env python
  
 # pybackup - ease regular encrypted backups
-# Copyright (C) 2013 Óscar Pereira
+# Copyright (C) 2014 Óscar Pereira
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -51,16 +51,20 @@ def create_tar_archive():
   if os.path.exists("~/tmp/" + tar_archive_name):
     return "~/tmp/"+tar_archive_name
 
+  print("Creating TAR archive... ", end="", flush=True)
   sp.call("sudo tar -cf - " + directories + " " + root_directories + " | pv --wait -s $( 2> /dev/null du -sbc " +
             directories + " " + root_directories + " | tail -1 | awk '{print \
             $1}') | gzip > " + "~/tmp/" + tar_archive_name , shell = True,
             stdout = sp.PIPE )
+  print("Done!")
 
   return "~/tmp/"+tar_archive_name
 
 def delete_tar_archive(tar_archive_name):
   '''Delete tar archive in ~/tmp/tar_archive_name'''
-  sp.call("rm -rf " + "~/tmp/" + tar_archive_name, shell = True)
+  print("Removing TAR archive... ", end="", flush=True)
+  sp.call("rm " + "~/tmp/" + tar_archive_name, shell = True)
+  print("Done!")
 
 def backup(tar_archive_path):
   '''Does the backup of tar ONLY. Assumes all drives are mounted (and leaves them like that)'''
