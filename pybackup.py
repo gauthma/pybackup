@@ -60,10 +60,10 @@ def create_tar_archive():
 
   return "~/tmp/"+tar_archive_name
 
-def delete_tar_archive(tar_archive_name):
+def delete_tar_archive(tar_archive_path):
   '''Delete tar archive in ~/tmp/tar_archive_name'''
   print("Removing TAR archive... ", end="", flush=True)
-  sp.call("rm " + "~/tmp/" + tar_archive_name, shell = True)
+  sp.call("rm " + tar_archive_path, shell = True)
   print("Done!")
 
 def backup(tar_archive_path):
@@ -73,6 +73,7 @@ def backup(tar_archive_path):
   luks_drive_mount_point=config['settings']['luks_drive_mount_point']
   backup_dir_name=config['settings']['backup_dir_name']
   backup_dir=luks_drive_mount_point + "/" + backup_dir_name
+  # XXX TODO check that dirs exist before adding them to rsync...
   rsync_directories=[ shellquote(i) for i in config['dirs']['rsync_directories'] ]
 
   # XXX TODO put pv here to show the copy progress
@@ -148,9 +149,12 @@ def do_rsync_backup():
     # otherwise rsync copies the *contents* of the folder instead of the folder itself
     # WHICH IS PROBLEMATIC BECAUSE OF DELETE
     if folder.endswith('/'): folder = folder[:-1]
-    output = sp.check_output("rsync -avz --human-readable --delete-during --exclude=\"*.swp\" "
-              + folder + " " + backup_dir, shell=True,)
-    print(output)
+    try:
+      output = sp.check_output("rsync -avz --human-readable --delete-during --exclude=\"*.swp\" "
+          + folder + " " + backup_dir, shell=True,)
+      print(output)
+    except Exception as e:
+      print("Rsync for %s **FAILED**: %s" % (folder, str(e)))
 
 def parse_config_file():
   from os import path
@@ -161,9 +165,10 @@ def parse_config_file():
     json_data=open(script_path + 'backup.json')
     data=json.load(json_data)
     return data
-  except:
-    print("Could not read config file:")
-    raise
+  except Exception as e:
+    print("Could not parse config file: %s" % str(e))
+    exit(-1)
+  # raise
   # useful for debug
   #from pprint import pprint
   #pprint(data)
