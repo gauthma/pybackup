@@ -7,19 +7,20 @@ choosing. Information to back up is separated in two components:
 
 	1. Information for which you want multiple integral copies,
 		 gzipped. This is usually personal documents that are not very
-		 large (for instance, not photos), and that evolves over time.
-		 For example, a thesis you're working on. But it might also
-		 include things like the configuration files in /etc (which
-		 might require `sudo` privileges). All this information is
-		 stored in a gzipped tarball, named with the current date and
-		 timestamp.
+		 large (for instance, not photos), and that evolve over time. In
+		 effect, this implements a rudimentary versioning scheme. For
+		 example, a thesis you're working on. But it might also include
+		 things like the configuration files in /etc (which might require
+		 `sudo` privileges). All this information is stored in a gzipped
+		 tarball, named with the current date and timestamp.
 	2. Information that, due to its volume, you want to keep only a
-		 copy, rscynced with the original. Photos, music, videos, for
+		 copy, rsync'd with the original. Photos, music, videos, for
 		 example.
 
 In the file backup.json, in the "dirs" section, you can choose which folders
 fit which category. Too see the available options, run the script
-with the `-h` option.
+with the `-h` option. The `directories_excl` is for directories to be
+**excluded** from the tarball.
 
 External Drive
 ---
@@ -37,6 +38,14 @@ options. Here's the process:
  - rsync the contents of the folders in dirs/rsync_directories to
 	 equally named folders in settings/backup_dir_name 
 
+The encrypted drive must be identified by its UUID. To determine your
+drive's UUID, the output of the following commands might be useful:
+
+```bash
+$ mount
+$ ls -l /dev/disk/by-uuid
+```
+
 Remote Network Storage
 ---
 The second scenario only backs up type 1. of information. Folders to be rsynced
@@ -47,18 +56,21 @@ Process outline:
 	 it in settings:remote_backup_tmp_path. 
  - encrypt that tarball using GnuPG with symmetric encryption, and a
 	 user supplied pass-phrase. This creates an archive in the same
-	 location as above, with the extension *.tar.gz.gpg. 
- - scp the encrypted archive to settings:remote_backup_dir_name in
+	 location as above, with the extension `.tar.gz.gpg`.
+ - scp the encrypted archive to `remote_backup_dir_name` in
 	 the machine settings:remote_site. Due note that this last setting
 	 must be something that can appended to "scp " and connect
 	 successfully. 
  - remove (clean up) the files created on the local machine.
 
-For your convenience, the capability of decrypting the tar.gz.gpg is
-also provided: just call the script with "-d
-archive_name.tar.gz.gpg". You'll be prompted for the password, and
-the decrypted version archive_name.tar.gz will be produced in the
-current folder. 
+Ideally, you should configure your machine so that `scp` can access it
+without requiring a password, e.g. with a key that access a hardened
+account.
+
+For your convenience, the capability of decrypting the `tar.gz.gpg` is
+also provided: just call the script with `-d archive_name.tar.gz.gpg`.
+You'll be prompted for the password, and the decrypted version
+archive_name.tar.gz will be produced in the current folder. 
 
 Install 
 ---
