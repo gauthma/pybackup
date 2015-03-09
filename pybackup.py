@@ -74,8 +74,8 @@ def create_tar_archive():
 
   tar_archive_name = get_name("tar_archive_name")
   if os.path.exists(tar_archive_name):
-    print("Archive " + tar_archive_name + " exists; not overwriting...\n")
-    return tar_archive_name
+    print("Archive " + tar_archive_name + " exists; skipping archive creation...\n")
+    return ""
 
   print("Creating TAR archive... ", end="", flush=True)
   dirs_size = sp.check_output("du -sbc " + directories + " " + root_directories 
@@ -127,7 +127,7 @@ def backup(tar_archive_path):
 # If flag_create_tarball is True, it calls create_tar_archive(), encrypts and
 # copies it remotely (and deletes it afterwords). 
 #
-# The encrypted archive is # always deleted before the function returning.
+# The encrypted archive is *always* deleted before the function returning.
 #
 # @param flag_create_tarball - whether or not to create the tarball to be backed
 # up @param tar_archive_path - the tarball's path, if we're not to create it
@@ -256,19 +256,27 @@ def mountLuks():
   if (os.path.exists(luks_drive_mount_point)):
     raise RuntimeError("LUKS mount point (" + luks_drive_mount_point + ") exists!\nExiting...")
 
-  open_luks_cmd = "cryptsetup open --type luks UUID=" + luksUUID + " " + luks_device_name
+  open_luks_cmd = "cryptsetup open --type luks UUID=" + luksUUID + " " + luks_device_name + " 2>&1 > /dev/null"
   create_luks_mount_point="mkdir -v " + luks_drive_mount_point
   mount_luks_cmd = "mount /dev/mapper/" + luks_device_name + " " + luks_drive_mount_point
   remove_luks_mount_point="rmdir -v " + luks_drive_mount_point
 
+  ret_code = None
   print("Enter password if necessary!")
   try: # TODO handle this properly! (error capture)
-    sp.call(open_luks_cmd, shell=True)
+    ret_code = sp.call(open_luks_cmd, shell=True)
+    if ret_code != 0:
+      print("Unable to mount LUKS drive: is it connected?")
+      return # exit try block
     sp.call(create_luks_mount_point, shell=True)
     sp.call(mount_luks_cmd, shell=True)
   except:
     print("Ups!")
     sp.call(remove_luks_mount_point)
+
+  if ret_code != 0:
+    return False
+  return True
 
 def unmountLuks():
   luks_drive_mount_point=config['settings']['luks_drive_mount_point']
@@ -333,9 +341,9 @@ def main():
   elif args.unmountLuks:
     unmountLuks()
   elif args.do_backup: # XXX DONT USE THIS! NEED TO THINK BETTER ABOUT PASSWD FLOWS
-    mountLuks()
-    tar_archive_path = create_tar_archive()
-    remote_backup(tar_archive_path)
+    if not mountLuks():
+      return
+    remote_backup(flag_create_tarball = True)
     backup(tar_archive_path)
     delete_tar_archive(tar_archive_path)
     do_rsync_backup()
@@ -343,14 +351,21 @@ def main():
   elif args.do_remote_backup:
     remote_backup(flag_create_tarball = True)
   elif args.do_rsync_backup:
-    mountLuks()
+    if not mountLuks():
+      return
     do_rsync_backup()
     unmountLuks()
   elif args.remote_backup_archive_name:
     decrypt_remote_backup(args.remote_backup_archive_name)
   else:
-    mountLuks()
+    if not mountLuks():
+      return
+
     tar_archive_path = create_tar_archive()
+    if tar_archive_path == "":
+      unmountLuks()
+      return
+
     backup(tar_archive_path)
     delete_tar_archive(tar_archive_path)
     do_rsync_backup()
