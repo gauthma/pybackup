@@ -31,10 +31,21 @@ from ntpath import basename
 
 config = None
 
-# XXX TODO check for all the other dependencies...
 def check_deps():
   if which("pv") is None:
     print("pv not found!")
+    return False
+  if which("scp") is None:
+    print("scp not found!")
+    return False
+  if which("rsync") is None:
+    print("rsync not found!")
+    return False
+  if which("tar") is None:
+    print("tar not found!")
+    return False
+  if which("gzip") is None:
+    print("gzip not found!")
     return False
 
   return True
@@ -45,32 +56,32 @@ def check_deps():
 # @param name A key identifying the file to be created (e.g. TAR archive).
 #
 # @return The requested name.
+#
 def get_name(name):
   computer=config['settings']['computer']
   user=config['settings']['user']
   backup_date=date.today().strftime("%Y%b%d")
-  timestamp=str(round(time()))
 
-  # where to create encryted archive (for remote upload)
-  backup_dir=config['settings']['remote_backup_tmp_path'] 
-  backup_dir="/home/" + user + "/" + backup_dir
+  # path for dir where tmp files are to be created
+  backup_dir=config['settings']['backup_tmp_path'] 
 
   if name == "tar_archive_name":
-    return "/home/" + user + "/tmp/" + computer + "-full-" + backup_date +".tar.gz"
+    return backup_dir + "/bck-" + computer + "-" + backup_date + ".tar.gz"
   elif name == "encrypted_tar_archive_name":
-    return backup_dir + "/bck-" + timestamp + "-" + backup_date + ".tar.gz.gpg"
+    return backup_dir + "/bck-" + computer + "-" + backup_date + ".tar.gz.gpg"
 
 ##
 # @brief Create TAR archive which will be backed up.
 #
-# @return the and full path of the created TAR archive.
+# @return the full path of the created TAR archive.
+#
 def create_tar_archive():
   directories=' '.join([ quote(i) for i in config['dirs']['directories'] ])
   root_directories=' '.join([ quote(i) for i in config['dirs']['root_directories'] ])
   excluded_directories=' '.join([ quote(i) for i in config['dirs']['directories_excl'] ])
   excluded_directories_cmd=' --exclude='.join([ quote(i) for i in config['dirs']['directories_excl'] ])
   excluded_directories_cmd=' --exclude=' + excluded_directories_cmd
-  user=config['settings']['user']
+  user=config['settings']['user'] # for chown'ing the tar file to the user (instead of root)
 
   tar_archive_name = get_name("tar_archive_name")
   if os.path.exists(tar_archive_name):
@@ -92,7 +103,7 @@ def create_tar_archive():
   return tar_archive_name
 
 def delete_tar_archive(tar_archive_path):
-  '''Delete tar archive in /home/user/tmp/tar_archive_name'''
+  '''Delete tar archive in tar_archive_path'''
   user=config['settings']['user']
   print("Removing TAR archive... ", end="", flush=True)
   sp.call("sudo -u " + user + " rm -rf " + tar_archive_path, shell = True)
@@ -110,30 +121,20 @@ def backup(tar_archive_path):
   backup_archive_name = basename(tar_archive_path)
 
   print("Copying TAR file...", end="", flush=True)
-  # TODO this call to pv does NOT work...
-  # sp.call("sudo -u " + user + " pv " + tar_archive_path + " | cp " 
-  #         + tar_archive_path + " " + backup_dir, shell=True)
   sp.call("sudo -u " + user + " pv " + tar_archive_path + " > " 
           + backup_dir+ "/" + backup_archive_name , shell=True)
 
 ##
 # @brief Does remote backup. It encrypts a TAR archive and copies it a remote
-# location. It can optionally create it too.
-# 
-# More concretely, if flag_create_tarball is False, it receives the TAR archive
-# path (from the tar_archive_path parameter), encrypts and copies it (*without*
-# deleting it afterwords). 
-#
-# If flag_create_tarball is True, it calls create_tar_archive(), encrypts and
-# copies it remotely (and deletes it afterwords). 
+# location.
 #
 # The encrypted archive is *always* deleted before the function returning.
 #
-# @param flag_create_tarball - whether or not to create the tarball to be backed
-# up @param tar_archive_path - the tarball's path, if we're not to create it
+# up @param tar_archive_path - the tarball's path
 #
 # @return void
-def remote_backup(flag_create_tarball = False, tar_archive_path = ""):
+#
+def remote_backup(tar_archive_path, passphrase):
   # --- BEGIN get data from config file --- #
   user = config["settings"]["user"]
 
@@ -144,27 +145,13 @@ def remote_backup(flag_create_tarball = False, tar_archive_path = ""):
   remote_site=config['settings']['remote_site']
   # --- END get data from config file --- #
 
-  if (not os.path.exists(os.path.expanduser(backup_dir))):
+  backup_dir=get_name("encrypted_tar_archive_name")
+  if (not os.path.exists(os.path.dirname(backup_dir))):
     print ("Backup tmp path does NOT exist: ", backup_dir, "\nExiting...")
     return
 
-  # now set time/date, and file names
-  timestamp=str(round(time()))
-  backup_date=date.today().strftime("%Y%b%d")
-
   # encrypt and scp the result
   try:
-    passphrase = "1"
-    passphrase1 = "2"
-    while passphrase != passphrase1:
-      passphrase = getpass(prompt='Please enter encryption passphrase: ')
-      passphrase1 = getpass(prompt='Please enter encryption passphrase again: ')
-      if passphrase != passphrase1:
-        print("Passphrases did NOT match! Try again...")
-
-    if flag_create_tarball is True:
-      tar_archive_path = create_tar_archive()
-
     print ("Creating encrypted backup archive...")
     enc_archive_name = get_name("encrypted_tar_archive_name")
     sp.call("sudo -u " + user + " pv " + tar_archive_path + 
@@ -172,36 +159,41 @@ def remote_backup(flag_create_tarball = False, tar_archive_path = ""):
             + "\" --no-tty --cipher-algo aes256 --force-mdc -o " 
             + enc_archive_name , shell=True)
 
-    # clear the passphrases, they are no longer needed
-    del passphrase
-    del passphrase1
-
     print ("Transfering encrypted backup archive to remote location...")
-    sp.call("sudo -u " + user + " scp " + backup_dir + "/bck-" + timestamp 
-            + "-" + backup_date + ".tar.gz.gpg " + remote_site + ":" 
-            + remote_backup_dir_name, shell=True)
+    sp.call("sudo -u " + user + " scp " + enc_archive_name + " " + remote_site 
+            + ":" + remote_backup_dir_name, shell=True)
 
-    # clean up
-    print ("Cleaning up...")
-    if flag_create_tarball is True:
-      delete_tar_archive(tar_archive_path)
-    print("Removing encrypted TAR archive... ", end="", flush=True)
-    sp.call("sudo -u " + user + " rm -rf " + backup_dir + "/bck-" + timestamp 
-            + "-" + backup_date + ".tar.gz.gpg", shell=True)
+    # delete encrypted archive
+    sp.call("sudo -u " + user + " rm -rf " + enc_archive_name, shell = True) 
     print("DONE!")
   except GetPassWarning:
     print("Could not read passphrase. Exiting...")
 
-def decrypt_remote_backup(encrypted_file): # TODO make sure decrypted file is written in current dir, not dir where script is
-  '''Assumes that the encrypted file has name like: filename.tar.gz.gpg'''
+def decrypt_remote_backup(encrypted_file, path_for_decrypted=""): 
+  '''Aborts if encrypted file does NOT have a name like: filename.tar.gz.gpg'''
+  
+  if not encrypted_file.endswith(''):
+    print("Encrypted file must have a name like: filename.tar.gz.gpg")
+    return False
+
+  if path_for_decrypted != "": 
+    path_for_decrypted = os.path.expanduser(path_for_decrypted)
+
+  if path_for_decrypted != "" and not os.path.isdir(path_for_decrypted):
+    print("Path for decrypted archive must be directory! Exiting...\n")
+    return False
+
+  if not path_for_decrypted.endswith("/"):
+    path_for_decrypted = path_for_decrypted + "/"
+
   try:
     passphrase = getpass(prompt='Please enter decryption passphrase: ')
 
     print ("Decrypting backup archive... (this can take a few minutes)")
-    sp.call("echo -n \"" + passphrase + "\" | gpg --decrypt --batch \
-            --passphrase-fd 0 --no-tty --cipher-algo aes256 --force-mdc " 
-            + encrypted_file + " > " + encrypted_file[:-4], 
-            shell=True, stdout=sp.PIPE)
+    sp.call("echo -n \"" + quote(passphrase) + 
+        "\" | gpg --passphrase-fd 0 --no-tty --cipher-algo aes256 --force-mdc " +
+        "--decrypt --batch " + encrypted_file + " > " + 
+        quote(path_for_decrypted) + quote(encrypted_file[:-4]), shell=True, stdout=sp.PIPE)
     del passphrase
   except GetPassWarning:
     print("Could not read passphrase. Exiting...")
@@ -240,12 +232,6 @@ def parse_config_file():
   # useful for debug
   #from pprint import pprint
   #pprint(data)
-
-def shellquote(s):
-  '''Handle filenames that need escaping. Borrowed from:
-  http://stackoverflow.com/questions/35817/how-to-escape-sp.call-calls-in-python'''
-  #return "'" + s.replace("'", "'\\'") + "'"
-  return shlex.quote(s)
 
 def mountLuks():
   luksUUID=config['settings']['luksUUID']
@@ -294,9 +280,24 @@ def unmountLuks():
     return
 
   print("Enter password if necessary:")
-  sp.call("umount " + luks_drive_mount_point, shell=True) # TODO do this even if LUKS not mounted, but mount point exists?
+  sp.call("umount " + luks_drive_mount_point, shell=True)
   sp.call(remove_luks_mount_point, shell=True)
   sp.call("cryptsetup close " + luks_device_name, shell=True)
+
+def get_passphrase():
+  try:
+    passphrase = "1"
+    passphrase1 = "2"
+    while passphrase != passphrase1:
+      passphrase = getpass(prompt='Please enter encryption passphrase: ')
+      passphrase1 = getpass(prompt='Please enter encryption passphrase again: ')
+      if passphrase != passphrase1:
+        print("Passphrases did NOT match! Try again...")
+    del passphrase1
+    return passphrase
+  except GetPassWarning:
+    # print("Could not read passphrase. Exiting...")
+    raise
 
 def main():
   if not check_deps():
@@ -307,7 +308,8 @@ def main():
 
   parser = argparse.ArgumentParser(description='Automate backup process. **MUST \
                                                 BE RAN WITH _sudo_**! Run without arguments \
-                                                to open LUKS, backup stuff (tar, rsync but NOT remote), and close LUKS.')
+                                                to open LUKS, backup stuff (tar, \
+                                                rsync AND remote), and close LUKS.')
   parser.add_argument("-m", "--mount",
                       action="store_true", dest="mountLuks", default=False,
                       help="Only mount LUKS drive, and exit")
@@ -316,8 +318,8 @@ def main():
                       help="Only UNmount LUKS drive, and exit")
   parser.add_argument("-b", "--backup",
                       action="store_true", dest="do_backup", default=False,
-                      help="Mount LUKS drivem, do backup (i.e. tar and rsync AND \
-                      remote), unmount.")
+                      help="Mount LUKS drivem, do LOCAL backup (i.e. tar and \
+                      rsync but NOT remote), unmount.")
   parser.add_argument("-r", "--remote-backup",
                       action="store_true", dest="do_remote_backup", default=False,
                       help="Only do remote backup, (ignores tar and rsync list)")
@@ -325,14 +327,19 @@ def main():
                       action="store_true", dest="do_rsync_backup", default=False,
                       help="Only do rsync backup, (ignores tar and remote list)")
   parser.add_argument("-d", "--decrypt-remote-backup",
-                      dest="remote_backup_archive_name", default="",
+                      dest="opt_decrypt_remote_backup", nargs='+',
+                      metavar=("encryptedbackup.tar.gz.gpg", "output_dir"),
                       help="Decrypt remote backup archive (*.tar.gz.gpg)")
+  # TODO the nargs='+' is the last argument is not ideal; see
+  # https://stackoverflow.com/questions/23172172/range-for-nargs-in-argparse
+  # TODO it seems that dest cannot be the name of a function, otherwise it
+  # always gets called...
 
   # if -h given, control exits after the next line
   args = parser.parse_args()
 
   # check we're running with sudo
-  if os.getuid() != 0:
+  if os.getuid() != 0 and not args.opt_decrypt_remote_backup:
     print("Please run with sudo!")
     exit(-1)
 
@@ -340,23 +347,41 @@ def main():
     mountLuks()
   elif args.unmountLuks:
     unmountLuks()
-  elif args.do_backup: # XXX DONT USE THIS! NEED TO THINK BETTER ABOUT PASSWD FLOWS
+  elif args.do_backup:
     if not mountLuks():
       return
-    remote_backup(flag_create_tarball = True)
+    tar_archive_path = create_tar_archive()
+    if tar_archive_path == "":
+      unmountLuks()
+      return
+
     backup(tar_archive_path)
     delete_tar_archive(tar_archive_path)
+
     do_rsync_backup()
     unmountLuks()
   elif args.do_remote_backup:
-    remote_backup(flag_create_tarball = True)
+    tar_archive_path = create_tar_archive()
+    passphrase = get_passphrase()
+    remote_backup(tar_archive_path, passphrase)
+    del passphrase
+    delete_tar_archive(tar_archive_path)
   elif args.do_rsync_backup:
     if not mountLuks():
       return
     do_rsync_backup()
     unmountLuks()
-  elif args.remote_backup_archive_name:
-    decrypt_remote_backup(args.remote_backup_archive_name)
+  elif args.opt_decrypt_remote_backup:
+    if len(args.opt_decrypt_remote_backup) == 1:
+      decrypt_remote_backup(args.opt_decrypt_remote_backup[0])
+    elif len(args.opt_decrypt_remote_backup) == 2:
+      decrypt_remote_backup(args.opt_decrypt_remote_backup[0], 
+                            args.opt_decrypt_remote_backup[1])
+    else:
+      print("Decrypting backup takes one mandatory argument\n"
+          "(the encrypted archive file path), and one optional one\n"
+          "(the path where to save the decrypted archive)\n")
+      exit(-1)
   else:
     if not mountLuks():
       return
@@ -365,11 +390,13 @@ def main():
     if tar_archive_path == "":
       unmountLuks()
       return
-
     backup(tar_archive_path)
+    passphrase = get_passphrase()
+    remote_backup(tar_archive_path, passphrase)
+    del passphrase
     delete_tar_archive(tar_archive_path)
-    do_rsync_backup()
 
+    do_rsync_backup()
     unmountLuks()
 
 def exit_gracefully(signum, frame):
@@ -377,12 +404,12 @@ def exit_gracefully(signum, frame):
   # in raw_input when CTRL+C is pressed, and our signal handler is not re-entrant
   signal.signal(signal.SIGINT, original_sigint)
 
-  # TODO check if any tmp files exist and delete, this as is does not work...
-  delete_tar_archive(tar_archive_path)
+  user=config['settings']['user']
+  tmp_path=config['settings']['backup_tmp_path']
+  sp.call("sudo -u " + user + " rm -rf " + tmp_path + "/*", shell = True)
   unmountLuks()
 
-  # restore the exit gracefully handler here    
-  signal.signal(signal.SIGINT, exit_gracefully)
+  exit()
 
 if __name__ == "__main__":
   original_sigint = signal.getsignal(signal.SIGINT)
