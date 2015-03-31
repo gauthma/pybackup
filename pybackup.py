@@ -32,6 +32,12 @@ from ntpath import basename
 config = None
 
 def check_deps():
+  if which("cryptsetup") is None:
+    print("cryptsetup not found!")
+    return False
+  if which("gpg") is None:
+    print("gnupg (gpg binary) not found!")
+    return False
   if which("pv") is None:
     print("pv not found!")
     return False
@@ -318,11 +324,11 @@ def main():
                       help="Only UNmount LUKS drive, and exit")
   parser.add_argument("-b", "--backup",
                       action="store_true", dest="do_backup", default=False,
-                      help="Mount LUKS drivem, do LOCAL backup (i.e. tar and \
+                      help="Mount LUKS drive, do LOCAL backup (i.e. tar and \
                       rsync but NOT remote), unmount.")
   parser.add_argument("-r", "--remote-backup",
                       action="store_true", dest="do_remote_backup", default=False,
-                      help="Only do remote backup, (ignores tar and rsync list)")
+                      help="Only do remote backup, (ignores local tar and rsync list)")
   parser.add_argument("-R", "--rsync-backup",
                       action="store_true", dest="do_rsync_backup", default=False,
                       help="Only do rsync backup, (ignores tar and remote list)")
