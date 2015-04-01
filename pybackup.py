@@ -295,8 +295,8 @@ def get_passphrase():
     passphrase = "1"
     passphrase1 = "2"
     while passphrase != passphrase1:
-      passphrase = getpass(prompt='Please enter encryption passphrase: ')
-      passphrase1 = getpass(prompt='Please enter encryption passphrase again: ')
+      passphrase = getpass(prompt='Please enter passphrase for encryption of TAR archive: ')
+      passphrase1 = getpass(prompt='Please enter passphrase again: ')
       if passphrase != passphrase1:
         print("Passphrases did NOT match! Try again...")
     del passphrase1
@@ -389,16 +389,19 @@ def main():
           "(the path where to save the decrypted archive)\n")
       exit(-1)
   else:
+    # mount external drive and get LUKS passphrase
     if not mountLuks():
       return
+    # get passphrase for encypted remotely stored archive
+    passphrase = get_passphrase() 
 
     tar_archive_path = create_tar_archive()
     if tar_archive_path == "":
       unmountLuks()
       return
     backup(tar_archive_path)
-    passphrase = get_passphrase()
     remote_backup(tar_archive_path, passphrase)
+    # TAR archive (and passphrase for remotely storing it) are no longer needed
     del passphrase
     delete_tar_archive(tar_archive_path)
 
