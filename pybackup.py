@@ -67,14 +67,15 @@ def get_name(name):
   computer=config['settings']['computer']
   user=config['settings']['user']
   backup_date=date.today().strftime("%Y%b%d")
+  epoch=str(int(time()))
 
   # path for dir where tmp files are to be created
   backup_dir=config['settings']['backup_tmp_path'] 
 
   if name == "tar_archive_name":
-    return backup_dir + "/bck-" + computer + "-" + backup_date + ".tar.gz"
+    return backup_dir + "/bck-" + epoch + "-" + computer + "-" + backup_date + ".tar.gz"
   elif name == "encrypted_tar_archive_name":
-    return backup_dir + "/bck-" + computer + "-" + backup_date + ".tar.gz.gpg"
+    return backup_dir + "/bck-" + epoch + "-" + computer + "-" + backup_date + ".tar.gz.gpg"
 
 ##
 # @brief Create TAR archive which will be backed up.
@@ -217,9 +218,10 @@ def do_rsync_backup():
     # WHICH IS PROBLEMATIC BECAUSE OF DELETE
     if folder.endswith('/'): folder = folder[:-1]
     try:
-      output = sp.check_output("rsync -avz --human-readable --progress --delete-during --exclude=\"*.swp\" "
-          + folder + " " + backup_dir, shell=True,)
-      print(output) # TODO get rid of this bytearray...
+      output = sp.check_output("rsync -avz --human-readable --progress "
+                               + "--delete-during --exclude=\"*.swp\" " + folder 
+                               + " " + backup_dir, shell=True,)
+      print(output.decode('utf-8'))
     except Exception as e:
       print("Rsync for %s **FAILED**: %s" % (folder, str(e)))
 
