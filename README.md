@@ -69,11 +69,12 @@ backup storage.
 Install 
 ---
 
-Just copy the script and config file to any place of your choosing,
-`chmod u+x pybackup.py`, customize the config to suit your needs, and
-you're done.
+Just copy the script and configuration file to any place of your
+choosing, `chmod u+x pybackup.py`, customise the configuration to suit
+your needs, and you're done. Note that the `backup_dir_name` must be
+*manually* created in the destination volume.
 
-The encrypted drive must be identified by its uuid. To determine your
+The encrypted drive must be identified by its UUID. To determine your
 drive's UUID, the output of the following commands might be useful:
 
 ```bash
@@ -81,6 +82,37 @@ $ mount
 $ ls -l /dev/disk/by-uuid
 ```
 
+Creating an encrypted external volume
+------
+
+Based on the instructions
+[here](http://www.circuidipity.com/encrypt-external-drive.html) (I
+assume you have `cryptsetup` installed properly). Assuming the drive you
+intend to use, `sdX`, contains partition `sdX1`, which is what you
+intend to as backup location, then as root:
+
+~~~ bash
+# cryptsetup luksFormat /dev/sdX1
+# cryptsetup luksOpen /dev/sdX1 sdX1_backup
+~~~
+
+Then format the newly decrypted volume with `ext4`, and close the
+decrypted device:
+
+~~~ bash
+# mkfs.ext4 -E lazy_itable_init=0,lazy_journal_init=0 /dev/mapper/sdX1_crypt
+# cryptsetup luksClose /dev/mapper/sdX1_backup
+~~~
+
+If want to be sure the process went OK, you manually mount the decrypted
+device (obviously before closing it...):
+
+~~~ bash
+# mount -t ext4 /dev/mapper/sdX1_crypt /mnt
+~~~
+
+Don't forget unmount it afterwords (`# umount /mnt`). And that should be
+about it.
 
 Dependencies 
 ---
