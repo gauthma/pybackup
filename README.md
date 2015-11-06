@@ -91,7 +91,7 @@ assume you have `cryptsetup` installed properly). Assuming the drive you
 intend to use, `sdX`, contains partition `sdX1`, which is what you
 intend to as backup location, then as root:
 
-~~~ bash
+~~~ text
 # cryptsetup luksFormat /dev/sdX1
 # cryptsetup luksOpen /dev/sdX1 sdX1_backup
 ~~~
@@ -99,7 +99,7 @@ intend to as backup location, then as root:
 Then format the newly decrypted volume with `ext4`, and close the
 decrypted device:
 
-~~~ bash
+~~~ text
 # mkfs.ext4 -E lazy_itable_init=0,lazy_journal_init=0 /dev/mapper/sdX1_crypt
 # cryptsetup luksClose /dev/mapper/sdX1_backup
 ~~~
@@ -107,7 +107,7 @@ decrypted device:
 If want to be sure the process went OK, you manually mount the decrypted
 device (obviously before closing it...):
 
-~~~ bash
+~~~ text
 # mount -t ext4 /dev/mapper/sdX1_crypt /mnt
 ~~~
 
