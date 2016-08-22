@@ -1,13 +1,10 @@
 {
 	"settings"	: {
-		"computer"                : "mypc",
-		"remote_backup_tmp_path"  : "~/tmp/backups",
-		"remote_backup_dir_name"  : "~/backups",
-		"backup_dir_name"         : "backups",
-		"luksdrive"               : "/dev/sdc2",
-		"luks_device_name"        : "luksDevice",
-		"luks_drive_mount_point"  : "/media/luksDevice",
-		"remote_site"             : "user1@host1 -p 2222"
+		"computer"        : "mypc"                                 ,
+		"user"            : "myself"                               ,
+		"tmp_path"        : "~/tmp/backups"                        ,
+		"backup_dir_name" : "backups"                              ,
+		"luksUUID"        : "00000000-0000-0000-0000-000000000000"
 	},
 
 	"dirs"		: {
