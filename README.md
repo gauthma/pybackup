@@ -47,7 +47,7 @@ partition (instead of the whole disk), that is possible too---just use
 the label followed by the partition number, e.g. `sdX3`. Here we use the
 entire disk, which will contain only one partition, `sdX1` (you always
 need to have at least one partition...). But whether you use an entire
-drive or only a partition, *please ensure it is **unmounted***.
+drive or only a partition, *please ensure it is **unmounted** *.
 
 The next (optional) step is to overwrite the device with zeros. For even
 more ~~paranoia~~ security, use `/dev/random` instead of `/dev/zero`
